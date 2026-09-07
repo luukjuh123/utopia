@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: utopia
+  labels:
+    app: utopia
+spec:
+  type: ClusterIP
+  selector:
+    app: utopia
+  ports:
+    - name: http
+      port: 1516
+      targetPort: http

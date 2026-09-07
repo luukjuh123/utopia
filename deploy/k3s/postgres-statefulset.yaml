@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: utopia-postgres
+  labels:
+    app: utopia-postgres
+spec:
+  serviceName: utopia-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: utopia-postgres
+  template:
+    metadata:
+      labels:
+        app: utopia-postgres
+    spec:
+      containers:
+        - name: postgres
+          # Utopia stores embeddings in pgvector — plain postgres:16 won't have
+          # the extension available for its migrations to CREATE EXTENSION.
+          image: pgvector/pgvector:pg16
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: utopia
+            - name: POSTGRES_DB
+              value: utopia
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: utopia-postgres
+                  key: POSTGRES_PASSWORD
+            # Keep the cluster in a subdirectory so postgres never has to
+            # initdb into a volume root it does not own.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "utopia", "-d", "utopia"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "utopia", "-d", "utopia"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utopia
+  labels:
+    app: utopia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: utopia
+  template:
+    metadata:
+      labels:
+        app: utopia
+    spec:
+      # utopia-server runs its own migrations on startup, which fails fast if
+      # postgres isn't reachable yet — block here instead of CrashLoopBackOff.
+      initContainers:
+        - name: wait-for-postgres
+          image: pgvector/pgvector:pg16
+          command:
+            - sh
+            - -c
+            - until pg_isready -h utopia-postgres -U utopia -d utopia; do sleep 2; done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      containers:
+        - name: app
+          image: ghcr.io/luukjuh123/utopia
+          # newTag pins a floating tag (`main`), rebuilt in place on every
+          # push to the fork's main branch -- IfNotPresent would keep serving
+          # whatever digest the node cached under that tag string.
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 1516
+          envFrom:
+            - secretRef:
+                name: utopia-env
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          # Health is nested under the API prefix, not at the root -- the
+          # image also serves the SPA at /, so hitting / would return a 200
+          # index.html and look healthy even when the API is down.
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: utopia-data

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: utopia-data
+  labels:
+    app: utopia
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      # Uploaded files + the Tantivy full-text index (UTOPIA_DATA_DIR). Also
+      # where the credential-sealing key lands when UTOPIA_SECRET_KEY isn't
+      # set — losing this volume without that env var set means previously
+      # encrypted source credentials become undecryptable.
+      storage: 10Gi
